@@ -90,4 +90,32 @@ class AluguelTest {
 
         assertThrows(RegraDeNegocioException.class, aluguel::cancelar);
     }
+
+    @Test
+    @DisplayName("Não deve permitir desconto maior que o valor bruto do aluguel")
+    void naoDevePermitirDescontoMaiorQueValorBruto() {
+        // Valor bruto: (200 * 2) + (150 * 1) + 20 + 30 = 600.00
+        var aluguel = criarAluguelBase(
+                new BigDecimal("20.00"),
+                new BigDecimal("650.00"),
+                new BigDecimal("30.00")
+        );
+
+        assertThrows(RegraDeNegocioException.class, aluguel::calcularValorTotal);
+    }
+
+    @Test
+    @DisplayName("Deve permitir desconto igual ao valor bruto resultando em total zero")
+    void devePermitirDescontoIgualAoValorBruto() {
+        // Valor bruto: (200 * 2) + (150 * 1) + 0 + 50 = 600.00
+        var aluguel = criarAluguelBase(
+                BigDecimal.ZERO,
+                new BigDecimal("600.00"),
+                new BigDecimal("50.00")
+        );
+
+        aluguel.calcularValorTotal();
+
+        assertEquals(0, BigDecimal.ZERO.compareTo(aluguel.getValorTotal()));
+    }
 }
