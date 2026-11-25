@@ -52,6 +52,11 @@ public class Aluguel {
     private Endereco endereco;
 
     public Aluguel(Cliente cliente, DadosCadastroAluguel dadosCadastroAluguel, Endereco endereco) {
+        if (dadosCadastroAluguel.dataEntrega() != null
+                && dadosCadastroAluguel.dataRetirada() != null
+                && !dadosCadastroAluguel.dataRetirada().isAfter(dadosCadastroAluguel.dataEntrega())) {
+            throw new RegraDeNegocioException("A data de retirada deve ser posterior à data de entrega!");
+        }
         this.dataCriacao = LocalDate.now();
         this.dataEntrega = dadosCadastroAluguel.dataEntrega();
         this.dataRetirada = dadosCadastroAluguel.dataRetirada();
