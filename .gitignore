@@ -7,7 +7,7 @@
 
 # Java / Spring Boot
 **/target/
-**/.mvn/
+**/.mvn/wrapper/maven-wrapper.jar
 **/.classpath
 **/.project
 **/.settings/
