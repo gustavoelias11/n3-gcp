@@ -118,4 +118,51 @@ class AluguelTest {
 
         assertEquals(0, BigDecimal.ZERO.compareTo(aluguel.getValorTotal()));
     }
+
+    @Test
+    @DisplayName("Não deve permitir aluguel com data de retirada anterior à data de entrega")
+    void naoDevePermitirDataRetiradaAnteriorADataEntrega() {
+        var dadosEndereco = new DadosCadastroEndereco(
+                "Rua das Flores", "123", "Centro", "Casa", "Joinville", "SC", "89201-000"
+        );
+        var endereco = new Endereco(dadosEndereco);
+        var cliente = new Cliente(new DadosCadastroCliente("Maria Silva", "12345678901", "47999999999", dadosEndereco));
+
+        var entrega = LocalDateTime.of(2026, 12, 12, 10, 0);
+        var retirada = LocalDateTime.of(2026, 12, 11, 18, 0);
+        var itemDto = new DadosCadastroAluguelItem(1L, 1);
+        var dadosInvalidos = new DadosCadastroAluguel(
+                1L, dadosEndereco, entrega, retirada, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, List.of(itemDto)
+        );
+
+        assertThrows(RegraDeNegocioException.class, () -> new Aluguel(cliente, dadosInvalidos, endereco));
+    }
+
+    @Test
+    @DisplayName("Não deve permitir aluguel com data de retirada igual à data de entrega")
+    void naoDevePermitirDataRetiradaIgualADataEntrega() {
+        var dadosEndereco = new DadosCadastroEndereco(
+                "Rua das Flores", "123", "Centro", "Casa", "Joinville", "SC", "89201-000"
+        );
+        var endereco = new Endereco(dadosEndereco);
+        var cliente = new Cliente(new DadosCadastroCliente("Maria Silva", "12345678901", "47999999999", dadosEndereco));
+
+        var mesmaData = LocalDateTime.of(2026, 12, 12, 10, 0);
+        var itemDto = new DadosCadastroAluguelItem(1L, 1);
+        var dadosInvalidos = new DadosCadastroAluguel(
+                1L, dadosEndereco, mesmaData, mesmaData, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, List.of(itemDto)
+        );
+
+        assertThrows(RegraDeNegocioException.class, () -> new Aluguel(cliente, dadosInvalidos, endereco));
+    }
+
+    @Test
+    @DisplayName("Deve criar aluguel quando a data de retirada for posterior à data de entrega")
+    void deveCriarAluguelComDatasValidas() {
+        var aluguel = criarAluguelBase(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+
+        assertEquals(StatusAluguel.PENDENTE, aluguel.getStatus());
+        assertEquals(LocalDateTime.of(2026, 12, 10, 10, 0), aluguel.getDataEntrega());
+        assertEquals(LocalDateTime.of(2026, 12, 11, 18, 0), aluguel.getDataRetirada());
+    }
 }
