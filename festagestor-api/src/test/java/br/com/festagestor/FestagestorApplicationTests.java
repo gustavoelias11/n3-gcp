@@ -1,13 +1,15 @@
 package br.com.festagestor;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 class FestagestorApplicationTests {
 
-	@Test
-	void contextLoads() {
-	}
-
+    @Test
+    @DisplayName("Classe principal da aplicação deve estar disponível")
+    void applicationClassDeveExistir() {
+        assertNotNull(FestagestorApplication.class);
+    }
 }

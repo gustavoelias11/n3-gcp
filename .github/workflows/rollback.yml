@@ -1,0 +1,69 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag da Release alvo para rollback (ex.: v1.0.0)'
+        required: true
+        type: string
+      motivo:
+        description: 'Motivo do rollback'
+        required: false
+        type: string
+        default: 'Incidente em produção'
+
+permissions:
+  contents: write
+  deployments: write
+
+jobs:
+  rollback-production:
+    name: Rollback em Produção
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://github.com/${{ github.repository }}/releases/tag/${{ inputs.tag }}
+    steps:
+      - name: Checkout da tag alvo (${{ inputs.tag }})
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Verificar existência da Release alvo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_TAG: ${{ inputs.tag }}
+        run: |
+          gh release view "$TARGET_TAG"
+
+      - name: Reconstruir artefato da Release alvo (verificação)
+        working-directory: festagestor-web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Promover Release alvo para Latest (rollback oficial)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_TAG: ${{ inputs.tag }}
+        run: |
+          gh release edit "$TARGET_TAG" --latest
+          CURRENT_LATEST=$(gh api "repos/${{ github.repository }}/releases/latest" --jq '.tag_name')
+          echo "Release Latest atual: $CURRENT_LATEST"
+          if [ "$CURRENT_LATEST" != "$TARGET_TAG" ]; then
+            echo "::error::Falha ao promover $TARGET_TAG para Latest (atual: $CURRENT_LATEST)."
+            exit 1
+          fi
+
+      - name: Registrar resumo do Rollback
+        run: |
+          {
+            echo "## Rollback em Produção Executado"
+            echo "- **Tag restaurada (Latest):** \`${{ inputs.tag }}\`"
+            echo "- **Commit da tag:** \`$(git rev-parse HEAD)\`"
+            echo "- **Motivo:** ${{ inputs.motivo }}"
+            echo "- **Executado por:** \`${{ github.actor }}\`"
+            echo "- **Data (UTC):** $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "- **Histórico da \`main\`:** Inalterado (rollback de baseline/release)"
+          } >> "$GITHUB_STEP_SUMMARY"

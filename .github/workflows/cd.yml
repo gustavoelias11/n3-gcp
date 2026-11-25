@@ -1,0 +1,135 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  deployments: write
+
+jobs:
+  release:
+    name: Gerar Baseline e Release (SemVer)
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.semver.outputs.should_release }}
+      tag: ${{ steps.semver.outputs.tag }}
+    steps:
+      - name: Checkout completo do histórico
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calcular próxima versão semântica (SemVer)
+        id: semver
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%s)
+          COMMIT_BODY=$(git log -1 --pretty=%b)
+          LAST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1 || true)
+
+          echo "Último commit: $COMMIT_MSG"
+          echo "Última tag: ${LAST_TAG:-nenhuma}"
+
+          if [ -z "$LAST_TAG" ]; then
+            if echo "$COMMIT_MSG" | grep -qE '^(feat|fix)(\([^)]+\))?!?:'; then
+              echo "should_release=true" >> "$GITHUB_OUTPUT"
+              echo "tag=v1.0.0" >> "$GITHUB_OUTPUT"
+            else
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          VERSION="${LAST_TAG#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+          if echo "$COMMIT_MSG" | grep -qE '^[a-z]+(\([^)]+\))?!:' || echo "$COMMIT_BODY" | grep -q 'BREAKING CHANGE:'; then
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+            SHOULD_RELEASE="true"
+          elif echo "$COMMIT_MSG" | grep -qE '^feat(\([^)]+\))?:'; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+            SHOULD_RELEASE="true"
+          elif echo "$COMMIT_MSG" | grep -qE '^fix(\([^)]+\))?:'; then
+            PATCH=$((PATCH + 1))
+            SHOULD_RELEASE="true"
+          else
+            SHOULD_RELEASE="false"
+          fi
+
+          echo "should_release=$SHOULD_RELEASE" >> "$GITHUB_OUTPUT"
+          if [ "$SHOULD_RELEASE" = "true" ]; then
+            NEXT_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+            echo "Próxima tag: $NEXT_TAG"
+            echo "tag=$NEXT_TAG" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Criar tag anotada e GitHub Release
+        if: steps.semver.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEXT_TAG: ${{ steps.semver.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "$NEXT_TAG" -m "Release $NEXT_TAG"
+          git push origin "$NEXT_TAG"
+
+          gh release create "$NEXT_TAG" \
+            --title "Release $NEXT_TAG" \
+            --generate-notes \
+            --latest
+
+  deploy-production:
+    name: Deploy em Produção
+    needs: release
+    if: needs.release.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://github.com/${{ github.repository }}/releases/tag/${{ needs.release.outputs.tag }}
+    steps:
+      - name: Checkout da tag da Release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: festagestor-api/pom.xml
+
+      - name: Empacotar Backend (JAR)
+        working-directory: festagestor-api
+        run: mvn -B package -DskipTests
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: festagestor-web/package-lock.json
+
+      - name: Build do Frontend
+        working-directory: festagestor-web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Registrar publicação em produção
+        run: |
+          {
+            echo "## Deploy em Produção Concluído"
+            echo "- **Release:** \`${{ needs.release.outputs.tag }}\`"
+            echo "- **Commit:** \`${{ github.sha }}\`"
+            echo "- **Ambiente:** \`production\`"
+            echo "- **Disparado por:** \`${{ github.actor }}\`"
+            echo "- **Data (UTC):** $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          } >> "$GITHUB_STEP_SUMMARY"
