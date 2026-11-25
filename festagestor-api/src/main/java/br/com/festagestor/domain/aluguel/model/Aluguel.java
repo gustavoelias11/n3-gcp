@@ -64,15 +64,23 @@ public class Aluguel {
     }
 
     public void calcularValorTotal() {
-        this.valorTotal = BigDecimal.ZERO;
-
-        BigDecimal subTotal;
+        BigDecimal totalItens = BigDecimal.ZERO;
 
         for (AluguelItem item : itens) {
-            subTotal = item.getPrecoUnitario().multiply(BigDecimal.valueOf(item.getQuantidade()));
-            this.valorTotal = this.valorTotal.add(subTotal);
+            BigDecimal subTotal = item.getPrecoUnitario().multiply(BigDecimal.valueOf(item.getQuantidade()));
+            totalItens = totalItens.add(subTotal);
         }
-        this.valorTotal = this.valorTotal.add(valorAcrescimo).add(valorFrete).subtract(valorDesconto);
+
+        BigDecimal acrescimo = valorAcrescimo != null ? valorAcrescimo : BigDecimal.ZERO;
+        BigDecimal frete = valorFrete != null ? valorFrete : BigDecimal.ZERO;
+        BigDecimal desconto = valorDesconto != null ? valorDesconto : BigDecimal.ZERO;
+
+        BigDecimal valorBruto = totalItens.add(acrescimo).add(frete);
+        if (desconto.compareTo(valorBruto) > 0) {
+            throw new RegraDeNegocioException("O valor do desconto não pode ser maior que o valor bruto do aluguel!");
+        }
+
+        this.valorTotal = valorBruto.subtract(desconto);
     }
 
     public void cancelar() {
