@@ -1,0 +1,39 @@
+package br.com.festagestor.domain.aluguel.repository;
+
+import br.com.festagestor.domain.aluguel.model.Aluguel;
+import br.com.festagestor.domain.aluguel.model.StatusAluguel;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+public interface AluguelRepository extends JpaRepository<Aluguel, Long> {
+    @Query("""
+        SELECT CASE WHEN COUNT(ai) > 0 THEN true ELSE false END
+        FROM AluguelItem ai
+        WHERE ai.item.id = :itemId
+        AND ai.aluguel.dataEntrega <= :dataRetiradaNova
+        AND ai.aluguel.dataRetirada >= :dataEntregaNova
+        AND ai.aluguel.status <> :statusCancelado
+        """)
+    boolean existsAluguelConflict(@Param("itemId") Long itemId,
+                                  @Param("dataEntregaNova") LocalDateTime dataEntregaNova,
+                                  @Param("dataRetiradaNova") LocalDateTime dataRetiradaNova,
+                                  @Param("statusCancelado") StatusAluguel statusAluguel);
+
+    @Query("""
+    SELECT COUNT(a) FROM Aluguel a WHERE a.status NOT IN ('PENDENTE', 'CANCELADO') AND MONTH(a.dataCriacao) = MONTH(CURRENT_DATE)
+    """)
+    Long aluguelMes();
+
+    @Query("""
+        SELECT COALESCE(SUM(a.valorTotal), 0)
+        FROM Aluguel a
+        WHERE a.status NOT IN ('PENDENTE', 'CANCELADO')
+        AND MONTH(a.dataCriacao) = MONTH(CURRENT_DATE)
+        AND YEAR(a.dataCriacao) = YEAR(CURRENT_DATE)
+            """)
+    BigDecimal somarFaturamento();
+}

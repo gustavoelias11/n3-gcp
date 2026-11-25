@@ -1,0 +1,63 @@
+package br.com.festagestor.domain.item.model;
+
+
+import br.com.festagestor.domain.shared.exception.RegraDeNegocioException;
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.math.BigDecimal;
+
+@Entity
+@Table(name = "itens")
+@Inheritance(strategy = InheritanceType.SINGLE_TABLE)
+@DiscriminatorColumn(name = "tipo")
+@Getter
+@Setter
+@NoArgsConstructor
+public abstract class Item {
+
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+
+    private Long id;
+
+    private String nome;
+
+    private String descricao;
+
+    @Column(name = "preco_aluguel")
+    private BigDecimal precoAluguel;
+
+    @Enumerated(EnumType.STRING)
+    private Status status;
+
+    private boolean ativo;
+
+    public Item(String nome, String descricao, BigDecimal precoAluguel, Status status) {
+        this.nome = nome;
+        this.descricao = descricao;
+        this.precoAluguel = precoAluguel;
+        this.status = status;
+        this.ativo = true;
+    }
+
+    public void inativar() {
+        this.ativo = false;
+    }
+
+    public void tornarDisponivel() {
+        this.status = Status.DISPONIVEL;
+    }
+
+    public void tornarAlugado() {
+        this.status = Status.ALUGADO;
+    }
+
+    public void colocarEmManutencao() {
+        if (this.status != Status.DISPONIVEL) {
+            throw new RegraDeNegocioException("Item não está disponível para entrar em manutenção!");
+        }
+        this.status = Status.MANUTENCAO;
+    }
+}

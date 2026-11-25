@@ -1,0 +1,143 @@
+package br.com.festagestor.domain.aluguel.service;
+
+import br.com.festagestor.domain.aluguel.model.Aluguel;
+import br.com.festagestor.domain.aluguel.model.AluguelItem;
+import br.com.festagestor.domain.aluguel.dto.DadosCadastroAluguel;
+import br.com.festagestor.domain.aluguel.dto.DadosCadastroAluguelItem;
+import br.com.festagestor.domain.aluguel.dto.DadosDetalhamentoAluguel;
+import br.com.festagestor.domain.aluguel.model.StatusAluguel;
+import br.com.festagestor.domain.cliente.model.Cliente;
+import br.com.festagestor.domain.shared.endereco.Endereco;
+import br.com.festagestor.domain.item.model.Item;
+import br.com.festagestor.domain.item.model.Status;
+import br.com.festagestor.domain.aluguel.repository.AluguelRepository;
+import br.com.festagestor.domain.cliente.repository.ClienteRepository;
+import br.com.festagestor.domain.item.repository.ItemRepository;
+import br.com.festagestor.domain.shared.exception.IdNaoEncontradoException;
+import br.com.festagestor.domain.shared.exception.RegraDeNegocioException;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.PatchMapping;
+
+import java.util.List;
+
+@Service
+public class AluguelService {
+    @Autowired
+    private AluguelRepository aluguelRepository;
+
+    @Autowired
+    private ClienteRepository clienteRepository;
+
+    @Autowired
+    private ItemRepository itemRepository;
+
+    //@PostMapping / Cadastrar
+    @Transactional
+    public DadosDetalhamentoAluguel cadastrar(DadosCadastroAluguel dados) {
+
+        var cliente = buscarCliente(dados.idCliente());
+        var endereco = obterEndereco(dados, cliente);
+
+        var aluguel = new Aluguel(cliente, dados, endereco);
+        var itens = mapearItens(dados.item(), aluguel);
+
+        aluguel.setItens(itens);
+        aluguel.calcularValorTotal();
+
+        aluguelRepository.save(aluguel);
+        return new DadosDetalhamentoAluguel(aluguel);
+    }
+
+    //@GetMapping / Listar
+    public Page<DadosDetalhamentoAluguel> listar(Pageable paginacao) {
+        return aluguelRepository.findAll(paginacao).map(DadosDetalhamentoAluguel::new);
+    }
+
+    //GetMapping("/{id}") / buscarPorId
+    public DadosDetalhamentoAluguel buscarPorId(Long id) {
+        return aluguelRepository.findById(id).map(DadosDetalhamentoAluguel::new).orElseThrow(() -> new IdNaoEncontradoException("Aluguel", id));
+    }
+
+    //PatchMapping("/{id}/cancelar") / cancelarAluguel
+    @Transactional
+    public DadosDetalhamentoAluguel cancelarAluguel(Long id) {
+        var aluguel = aluguelRepository.findById(id).orElseThrow(() -> new IdNaoEncontradoException("Aluguel", id));
+        aluguel.cancelar();
+        aluguel.getItens().forEach(aluguelItem -> {
+            var item = aluguelItem.getItem();
+            item.tornarDisponivel();
+        });
+        return new DadosDetalhamentoAluguel(aluguel);
+    }
+
+    //PatchMapping("/{id}/finalizar") / finalizarAluguel
+    @Transactional
+    public DadosDetalhamentoAluguel finalizarAluguel(Long id) {
+        var aluguel = aluguelRepository.findById(id).orElseThrow(() -> new IdNaoEncontradoException("Aluguel", id));
+        aluguel.finalizar();
+        aluguel.getItens().forEach(aluguelItem -> {
+            var item = aluguelItem.getItem();
+            item.tornarDisponivel();
+        });
+        return new DadosDetalhamentoAluguel(aluguel);
+    }
+
+    //@PatchMapping("/{id}/montagem") / montarAluguel
+    @Transactional
+    public DadosDetalhamentoAluguel montarAluguel(Long id) {
+        var aluguel = aluguelRepository.findById(id).orElseThrow(() -> new IdNaoEncontradoException("Aluguel", id));
+        aluguel.montar();
+        aluguel.getItens().forEach(aluguelItem -> {
+            var item = aluguelItem.getItem();
+            item.tornarAlugado();
+        });
+        return new DadosDetalhamentoAluguel(aluguel);
+    }
+
+    //@PatchMapping("/{id}/confirmar") / confirmarAluguel
+    @Transactional
+    public DadosDetalhamentoAluguel confirmarAluguel(Long id) {
+        var aluguel = aluguelRepository.findById(id).orElseThrow(() -> new IdNaoEncontradoException("Aluguel", id));
+        aluguel.confirmar();
+        return new DadosDetalhamentoAluguel(aluguel);
+    }
+
+    private Cliente buscarCliente(Long id) {
+        return clienteRepository.findById(id).orElseThrow(() -> new RegraDeNegocioException("Cliente não encontrado com o id: " + id));
+    }
+
+    private Endereco obterEndereco(DadosCadastroAluguel dados, Cliente cliente) {
+        if (dados.endereco() != null) {
+            return new Endereco(dados.endereco());
+        }
+        return cliente.getEndereco();
+    }
+
+    private List<AluguelItem> mapearItens(List<DadosCadastroAluguelItem> itensDto, Aluguel aluguel) {
+        return itensDto.stream().map(itemDto -> {
+            Item item = itemRepository.findById(itemDto.idItem())
+                    .orElseThrow(() -> new RegraDeNegocioException("Item não encontrado com o id: " + itemDto.idItem()));
+
+            if (item.getStatus() == Status.MANUTENCAO) {
+                throw new RegraDeNegocioException(("O item " + item.getNome() + " não está disponível para aluguel"));
+            }
+
+            boolean dataOcupada = aluguelRepository.existsAluguelConflict(
+                    item.getId(),
+                    aluguel.getDataEntrega(),
+                    aluguel.getDataRetirada(),
+                    StatusAluguel.CANCELADO
+            );
+            if (dataOcupada) {
+                throw new RegraDeNegocioException("O item " + item.getNome() + " está ocupado!");
+            }
+
+            return new AluguelItem(aluguel, item, itemDto);
+        }).toList();
+    }
+}

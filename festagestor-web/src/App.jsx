@@ -1,0 +1,23 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import LoginPage from './pages/LoginPage/LoginPage';
+import DashboardPage from './pages/DashboardPage/DashboardPage';
+import ItensPage from './pages/ItensPage/ItensPage';
+
+export function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Rota inicial carrega o Login */}
+        <Route path="/" element={<LoginPage />} />
+        
+        {/* Rota privada do sistema */}
+        <Route path="/dashboard" element={<DashboardPage />} />
+
+        <Route path='/itens' element={<ItensPage />} />
+        
+        {/* Qualquer outra URL digitada redireciona para a raiz */}
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}

@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@theme {
+  /* Marca / Ação principal */
+  --color-primary: #2563EB;
+  --color-primary-foreground: #FFFFFF;
+  --color-primary-dark: #1E3A8A;
+
+  /* Status e feedback */
+  --color-confirmed: #10B100;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-danger: #DC2626;
+  --color-destructive: #DC2626;
+
+  /* Fundos e superfícies */
+  --color-background: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #F1F5F9;
+
+  /* Textos */
+  --color-foreground: #0F172A;
+  --color-muted: #F1F5F9;
+  --color-muted-foreground: #64748B;
+
+  /* Bordas, inputs e estados de hover/foco */
+  --color-border: #E2E8F0;
+  --color-input: #CBD5E1;
+  --color-ring: #2563EB;
+  --color-accent: #F1F5F9;
+  --color-accent-foreground: #0F172A;
+}
+
+@layer base {
+  button:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+}
